@@ -1,0 +1,14 @@
+#Como ativar o projeto 
+#Instale o Python 3.x
+#Instale o MySQL
+#Crie o banco de dados com o script acima
+#Navegue até o diretório do projeto
+#Instale as dependências:
+
+pip install -r requirements.txt
+
+#Execute o servidor:
+python app.py
+
+#Acesse http://localhost:5000  no seu navegador
+     

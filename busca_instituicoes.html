@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Busca de Instituições - Plataforma de Doações</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Plataforma de Doações Solidárias</h1>
+            <div class="perfil-usuario">
+                <div class="dropdown">
+                    <button class="btn-perfil" id="btn-perfil">{{ session.nome }}</button>
+                    <div class="dropdown-content">
+                        <a href="{{ url_for('busca_instituicoes') }}">Minhas Doações</a>
+                        <a href="{{ url_for('logout') }}">Sair</a>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="tab-content active-tab">
+            <h2>Instituições Próximas</h2>
+            {% if msg %}
+                <p style="color: green;">{{ msg }}</p>
+            {% endif %}
+            <div class="busca-localizacao">
+                <input type="text" id="localizacao-usuario" placeholder="Sua localização atual (ex: Rua A, 100)">
+                <button onclick="buscarInstituicoes()">Buscar Próximas</button>
+            </div>
+            <div class="mapa-container" id="mapa-container">
+                <p>Mapa de localização das instituições</p>
+            </div>
+            <div class="instituicoes-list" id="instituicoes-list">
+                {% for instituicao in instituicoes %}
+                <div class="instituicao-item">
+                    <div class="instituicao-info">
+                        <h3>{{ instituicao.nome }}</h3>
+                        <div class="endereco-instituicao">Endereço: {{ instituicao.endereco }}</div>
+                        <div class="contato-instituicao">Telefone: {{ instituicao.telefone }}</div>
+                        <div class="contato-instituicao">CNPJ: {{ instituicao.cnpj }}</div>
+                    </div>
+                    <div class="distancia">10 km</div>
+                    <div class="acoes">
+                        <a href="{{ instituicao.url_doacao }}" target="_blank">
+                            <button>Acessar</button>
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
