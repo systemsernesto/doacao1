@@ -1,50 +1,62 @@
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify
-from flask_mysqldb import MySQL
-import MySQLdb.cursors
-import re
+# app.py
 import os
+import math
+import requests
+from flask import Flask, render_template, request, redirect, url_for, flash, session
+from werkzeug.security import generate_password_hash, check_password_hash
+import mysql.connector
+from mysql.connector import Error
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY')
 
-# Configurações do banco de dados
-app.secret_key = 'your_secret_key'
-app.config['MYSQL_HOST'] = 'localhost'
-app.config['MYSQL_USER'] = 'root'
-app.config['MYSQL_PASSWORD'] = ''
-app.config['MYSQL_DB'] = 'doacoes_db'
+# Configuração do banco
+DB_CONFIG = {
+    'host': os.getenv('DB_HOST'),
+    'database': os.getenv('DB_NAME'),
+    'user': os.getenv('DB_USER'),
+    'password': os.getenv('DB_PASSWORD')
+}
 
-mysql = MySQL(app)
+# Função para obter coordenadas de um endereço (OpenStreetMap Nominatim)
+def get_coordinates(address):
+    try:
+        url = "https://nominatim.openstreetmap.org/search"
+        params = {
+            'q': address,
+            'format': 'json',
+            'limit': 1
+        }
+        headers = {'User-Agent': 'DoacoesApp/1.0 (seu@email.com)'}
+        response = requests.get(url, params=params, headers=headers, timeout=5)
+        data = response.json()
+        if data:
+            return float(data[0]['lat']), float(data[0]['lon'])
+    except Exception as e:
+        print(f"Erro ao geocodificar: {e}")
+    return None, None
 
-# Rota principal
+# Função para calcular distância (Haversine)
+def haversine(lat1, lon1, lat2, lon2):
+    R = 6371  # raio da Terra em km
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lon2 - lon1)
+    a = math.sin(delta_phi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(delta_lambda/2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
+
 @app.route('/')
 def index():
     return render_template('index.html')
 
-# Rota para login
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        email = request.form['email']
-        password = request.form['password']
-        
-        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute('SELECT * FROM usuarios WHERE email = %s AND senha = %s', (email, password))
-        account = cursor.fetchone()
-        
-        if account:
-            session['loggedin'] = True
-            session['id'] = account['id']
-            session['nome'] = account['nome']
-            session['email'] = account['email']
-            return redirect(url_for('busca_instituicoes'))
-        else:
-            return render_template('login.html', msg='Credenciais inválidas!')
-    
-    return render_template('login.html')
-
-# Rota para cadastro de usuário
-@app.route('/cadastro_usuario', methods=['GET', 'POST'])
-def cadastro_usuario():
+# --- Cadastro de Usuário ---
+@app.route('/register', methods=['GET', 'POST'])
+def register_user():
     if request.method == 'POST':
         nome = request.form['nome']
         endereco = request.form['endereco']
@@ -52,86 +64,131 @@ def cadastro_usuario():
         email = request.form['email']
         cpf = request.form['cpf']
         senha = request.form['senha']
-        
-        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        
-        # Verificar se o email já existe
-        cursor.execute('SELECT * FROM usuarios WHERE email = %s', (email,))
-        account = cursor.fetchone()
-        
-        if account:
-            return render_template('cadastro_usuario.html', msg='Email já cadastrado!')
-        elif not re.match(r'[^@]+@[^@]+\.[^@]+', email):
-            return render_template('cadastro_usuario.html', msg='Email inválido!')
-        elif not re.match(r'^\d{3}\.\d{3}\.\d{3}-\d{2}$', cpf):
-            return render_template('cadastro_usuario.html', msg='CPF inválido!')
-        else:
-            cursor.execute('INSERT INTO usuarios (nome, endereco, telefone, email, cpf, senha) VALUES (%s, %s, %s, %s, %s, %s)',
-                           (nome, endereco, telefone, email, cpf, senha))
-            mysql.connection.commit()
-            return render_template('login.html', msg='Cadastro realizado com sucesso!')
-    
-    return render_template('cadastro_usuario.html')
 
-# Rota para cadastro de instituição
-@app.route('/cadastro_instituicao', methods=['GET', 'POST'])
-def cadastro_instituicao():
-    if 'loggedin' not in session:
+        lat, lon = get_coordinates(endereco)
+
+        try:
+            conn = mysql.connector.connect(**DB_CONFIG)
+            cursor = conn.cursor()
+            query = """
+                INSERT INTO usuarios (nome, endereco, telefone, email, cpf, senha, latitude, longitude)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(query, (nome, endereco, telefone, email, cpf, generate_password_hash(senha), lat, lon))
+            conn.commit()
+            flash('Usuário cadastrado com sucesso!', 'success')
+            return redirect(url_for('login'))
+        except Error as e:
+            flash(f'Erro ao cadastrar: {e}', 'danger')
+        finally:
+            if conn.is_connected():
+                cursor.close()
+                conn.close()
+    return render_template('register_user.html')
+
+# --- Login ---
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        email = request.form['email']
+        senha = request.form['senha']
+        try:
+            conn = mysql.connector.connect(**DB_CONFIG)
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute("SELECT * FROM usuarios WHERE email = %s", (email,))
+            user = cursor.fetchone()
+            if user and check_password_hash(user['senha'], senha):
+                session['user_id'] = user['id_usuario']
+                session['user_name'] = user['nome']
+                return redirect(url_for('register_org'))
+            else:
+                flash('Login inválido', 'danger')
+        except Error as e:
+            flash(f'Erro: {e}', 'danger')
+        finally:
+            if conn.is_connected():
+                cursor.close()
+                conn.close()
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('index'))
+
+# --- Cadastro de Instituição (só logado) ---
+@app.route('/register_org', methods=['GET', 'POST'])
+def register_org():
+    if 'user_id' not in session:
         return redirect(url_for('login'))
-    
+
     if request.method == 'POST':
         nome = request.form['nome']
         endereco = request.form['endereco']
         telefone = request.form['telefone']
         url_doacao = request.form['url_doacao']
         cnpj = request.form['cnpj']
-        
-        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-        cursor.execute('INSERT INTO instituicoes (nome, endereco, telefone, url_doacao, cnpj) VALUES (%s, %s, %s, %s, %s)',
-                       (nome, endereco, telefone, url_doacao, cnpj))
-        mysql.connection.commit()
-        return render_template('busca_instituicoes.html', msg='Instituição cadastrada com sucesso!')
-    
-    return render_template('cadastro_instituicao.html')
 
-# Rota para busca de instituições
-@app.route('/busca_instituicoes')
-def busca_instituicoes():
-    if 'loggedin' not in session:
-        return redirect(url_for('login'))
-    
-    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-    cursor.execute('SELECT * FROM instituicoes')
-    instituicoes = cursor.fetchall()
-    
-    return render_template('busca_instituicoes.html', instituicoes=instituicoes, usuario_nome=session['nome'])
+        lat, lon = get_coordinates(endereco)
 
-# Rota para logout
-@app.route('/logout')
-def logout():
-    session.pop('loggedin', None)
-    session.pop('id', None)
-    session.pop('nome', None)
-    session.pop('email', None)
-    return redirect(url_for('index'))
+        try:
+            conn = mysql.connector.connect(**DB_CONFIG)
+            cursor = conn.cursor()
+            query = """
+                INSERT INTO instituicoes (nome, endereco, telefone, url_doacao, cnpj, latitude, longitude)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """
+            cursor.execute(query, (nome, endereco, telefone, url_doacao, cnpj, lat, lon))
+            conn.commit()
+            flash('Instituição cadastrada!', 'success')
+            return redirect(url_for('search'))
+        except Error as e:
+            flash(f'Erro: {e}', 'danger')
+        finally:
+            if conn.is_connected():
+                cursor.close()
+                conn.close()
+    return render_template('register_org.html')
 
-# Rota para API de busca de instituições próximas
-@app.route('/api/instituicoes_proximas', methods=['GET'])
-def instituicoes_proximas():
-    if 'loggedin' not in session:
-        return jsonify({'error': 'Acesso não autorizado'}), 401
-    
-    localizacao = request.args.get('localizacao', '')
-    
-    cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
-    cursor.execute('SELECT * FROM instituicoes')
-    instituicoes = cursor.fetchall()
-    
-    # Simular cálculo de distância
-    for inst in instituicoes:
-        inst['distancia'] = round(1 + (inst['id'] * 2.5), 1)  # Distância simulada
-    
-    return jsonify(instituicoes)
+# --- Busca de instituições próximas ---
+@app.route('/search', methods=['GET', 'POST'])
+def search():
+    instituicoes = []
+    user_lat, user_lon = None, None
+
+    if request.method == 'POST':
+        endereco = request.form['endereco']
+        user_lat, user_lon = get_coordinates(endereco)
+        if user_lat is None:
+            flash('Endereço não encontrado. Tente outro.', 'warning')
+            return render_template('search.html')
+
+    # Buscar todas as instituições
+    try:
+        conn = mysql.connector.connect(**DB_CONFIG)
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM instituicoes")
+        instituicoes = cursor.fetchall()
+
+        # Calcular distâncias
+        for inst in instituicoes:
+            if user_lat is not None and inst['latitude'] is not None:
+                dist = haversine(user_lat, user_lon, float(inst['latitude']), float(inst['longitude']))
+                inst['distancia_km'] = round(dist, 2)
+            else:
+                inst['distancia_km'] = None
+
+        # Ordenar por distância
+        instituicoes.sort(key=lambda x: x['distancia_km'] if x['distancia_km'] is not None else float('inf'))
+
+    except Error as e:
+        flash(f'Erro ao buscar instituições: {e}', 'danger')
+    finally:
+        if conn.is_connected():
+            cursor.close()
+            conn.close()
+
+    return render_template('search.html', instituicoes=instituicoes, user_lat=user_lat, user_lon=user_lon)
 
 if __name__ == '__main__':
     app.run(debug=True)
