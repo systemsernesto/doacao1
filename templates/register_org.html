@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Cadastrar Instituição Beneficente</h2>
+<form method="POST">
+    <label>Nome: <input type="text" name="nome" required></label><br>
+    <label>Endereço: <input type="text" name="endereco" required></label><br>
+    <label>Telefone: <input type="text" name="telefone"></label><br>
+    <label>URL de Doação: <input type="url" name="url_doacao" required></label><br>
+    <label>CNPJ: <input type="text" name="cnpj" required placeholder="00.000.000/0001-00"></label><br>
+    <button type="submit">Cadastrar Instituição</button>
+</form>
+{% endblock %}

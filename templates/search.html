@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Buscar Instituições Próximas</h2>
+<form method="POST">
+    <input type="text" name="endereco" placeholder="Seu endereço" required>
+    <button type="submit">Buscar</button>
+</form>
+
+{% if instituicoes %}
+<div id="map" style="height: 400px; margin: 20px 0;"></div>
+<ul>
+{% for inst in instituicoes %}
+    <li>
+        <strong>{{ inst.nome }}</strong><br>
+        Endereço: {{ inst.endereco }}<br>
+        {% if inst.distancia_km %}
+            Distância: {{ inst.distancia_km }} km<br>
+        {% endif %}
+        <a href="{{ inst.url_doacao }}" target="_blank">Doar</a>
+    </li>
+</ul>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if user_lat and user_lon %}
+<script>
+    var map = L.map('map').setView([{{ user_lat }}, {{ user_lon }}], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    }).addTo(map);
+
+    // Marcador do usuário
+    L.marker([{{ user_lat }}, {{ user_lon }}]).addTo(map)
+        .bindPopup('Sua localização').openPopup();
+
+    // Marcadores das instituições
+    {% for inst in instituicoes %}
+        {% if inst.latitude and inst.longitude %}
+            L.marker([{{ inst.latitude }}, {{ inst.longitude }}]).addTo(map)
+                .bindPopup("{{ inst.nome|e }}<br>{{ inst.distancia_km }} km");
+        {% endif %}
+    {% endfor %}
+</script>
+{% endif %}
+{% endblock %}

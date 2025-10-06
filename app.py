@@ -1,4 +1,3 @@
-# app.py
 import os
 import math
 import requests
@@ -13,7 +12,6 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY')
 
-# Configuração do banco
 DB_CONFIG = {
     'host': os.getenv('DB_HOST'),
     'database': os.getenv('DB_NAME'),
@@ -21,32 +19,25 @@ DB_CONFIG = {
     'password': os.getenv('DB_PASSWORD')
 }
 
-# Função para obter coordenadas de um endereço (OpenStreetMap Nominatim)
 def get_coordinates(address):
     try:
         url = "https://nominatim.openstreetmap.org/search"
-        params = {
-            'q': address,
-            'format': 'json',
-            'limit': 1
-        }
-        headers = {'User-Agent': 'DoacoesApp/1.0 (seu@email.com)'}
+        params = {'q': address, 'format': 'json', 'limit': 1}
+        headers = {'User-Agent': 'DoacoesApp/1.0 (contato@doacoes.local)'}
         response = requests.get(url, params=params, headers=headers, timeout=5)
         data = response.json()
-        if data:
+        if 
             return float(data[0]['lat']), float(data[0]['lon'])
-    except Exception as e:
-        print(f"Erro ao geocodificar: {e}")
+    except:
+        pass
     return None, None
 
-# Função para calcular distância (Haversine)
 def haversine(lat1, lon1, lat2, lon2):
-    R = 6371  # raio da Terra em km
-    phi1 = math.radians(lat1)
-    phi2 = math.radians(lat2)
-    delta_phi = math.radians(lat2 - lat1)
-    delta_lambda = math.radians(lon2 - lon1)
-    a = math.sin(delta_phi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(delta_lambda/2)**2
+    R = 6371
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
 
@@ -54,7 +45,6 @@ def haversine(lat1, lon1, lat2, lon2):
 def index():
     return render_template('index.html')
 
-# --- Cadastro de Usuário ---
 @app.route('/register', methods=['GET', 'POST'])
 def register_user():
     if request.method == 'POST':
@@ -66,27 +56,26 @@ def register_user():
         senha = request.form['senha']
 
         lat, lon = get_coordinates(endereco)
+        hashed_senha = generate_password_hash(senha)
 
         try:
             conn = mysql.connector.connect(**DB_CONFIG)
             cursor = conn.cursor()
-            query = """
+            cursor.execute("""
                 INSERT INTO usuarios (nome, endereco, telefone, email, cpf, senha, latitude, longitude)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            """
-            cursor.execute(query, (nome, endereco, telefone, email, cpf, generate_password_hash(senha), lat, lon))
+            """, (nome, endereco, telefone, email, cpf, hashed_senha, lat, lon))
             conn.commit()
             flash('Usuário cadastrado com sucesso!', 'success')
             return redirect(url_for('login'))
         except Error as e:
-            flash(f'Erro ao cadastrar: {e}', 'danger')
+            flash('Erro ao cadastrar. Verifique e-mail ou CPF duplicados.', 'danger')
         finally:
             if conn.is_connected():
                 cursor.close()
                 conn.close()
     return render_template('register_user.html')
 
-# --- Login ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -102,9 +91,9 @@ def login():
                 session['user_name'] = user['nome']
                 return redirect(url_for('register_org'))
             else:
-                flash('Login inválido', 'danger')
+                flash('E-mail ou senha inválidos.', 'danger')
         except Error as e:
-            flash(f'Erro: {e}', 'danger')
+            flash('Erro no login.', 'danger')
         finally:
             if conn.is_connected():
                 cursor.close()
@@ -116,12 +105,10 @@ def logout():
     session.clear()
     return redirect(url_for('index'))
 
-# --- Cadastro de Instituição (só logado) ---
 @app.route('/register_org', methods=['GET', 'POST'])
 def register_org():
     if 'user_id' not in session:
         return redirect(url_for('login'))
-
     if request.method == 'POST':
         nome = request.form['nome']
         endereco = request.form['endereco']
@@ -134,23 +121,21 @@ def register_org():
         try:
             conn = mysql.connector.connect(**DB_CONFIG)
             cursor = conn.cursor()
-            query = """
+            cursor.execute("""
                 INSERT INTO instituicoes (nome, endereco, telefone, url_doacao, cnpj, latitude, longitude)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """
-            cursor.execute(query, (nome, endereco, telefone, url_doacao, cnpj, lat, lon))
+            """, (nome, endereco, telefone, url_doacao, cnpj, lat, lon))
             conn.commit()
-            flash('Instituição cadastrada!', 'success')
+            flash('Instituição cadastrada com sucesso!', 'success')
             return redirect(url_for('search'))
         except Error as e:
-            flash(f'Erro: {e}', 'danger')
+            flash('Erro ao cadastrar instituição. CNPJ pode estar duplicado.', 'danger')
         finally:
             if conn.is_connected():
                 cursor.close()
                 conn.close()
     return render_template('register_org.html')
 
-# --- Busca de instituições próximas ---
 @app.route('/search', methods=['GET', 'POST'])
 def search():
     instituicoes = []
@@ -160,17 +145,15 @@ def search():
         endereco = request.form['endereco']
         user_lat, user_lon = get_coordinates(endereco)
         if user_lat is None:
-            flash('Endereço não encontrado. Tente outro.', 'warning')
+            flash('Endereço não encontrado. Tente novamente.', 'warning')
             return render_template('search.html')
 
-    # Buscar todas as instituições
     try:
         conn = mysql.connector.connect(**DB_CONFIG)
         cursor = conn.cursor(dictionary=True)
         cursor.execute("SELECT * FROM instituicoes")
         instituicoes = cursor.fetchall()
 
-        # Calcular distâncias
         for inst in instituicoes:
             if user_lat is not None and inst['latitude'] is not None:
                 dist = haversine(user_lat, user_lon, float(inst['latitude']), float(inst['longitude']))
@@ -178,11 +161,10 @@ def search():
             else:
                 inst['distancia_km'] = None
 
-        # Ordenar por distância
         instituicoes.sort(key=lambda x: x['distancia_km'] if x['distancia_km'] is not None else float('inf'))
 
     except Error as e:
-        flash(f'Erro ao buscar instituições: {e}', 'danger')
+        flash('Erro ao buscar instituições.', 'danger')
     finally:
         if conn.is_connected():
             cursor.close()
