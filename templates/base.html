@@ -2,24 +2,28 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>{% block title %}Doações{% endblock %}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Doações Solidárias{% endblock %}</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <nav>
-        <a href="{{ url_for('index') }}">Início</a>
-        {% if session.user_id %}
-            <a href="{{ url_for('register_org') }}">Cadastrar Instituição</a>
-            <a href="{{ url_for('logout') }}">Sair ({{ session.user_name }})</a>
-        {% else %}
-            <a href="{{ url_for('login') }}">Login</a>
-            <a href="{{ url_for('register_user') }}">Cadastre-se</a>
-        {% endif %}
-        <a href="{{ url_for('search') }}">Buscar Instituições</a>
-    </nav>
+    <header>
+        <h1>Doações Solidárias</h1>
+        <nav>
+            <a href="{{ url_for('index') }}">Início</a>
+            {% if session.user_id %}
+                <a href="{{ url_for('register_org') }}">Cadastrar Instituição</a>
+                <a href="{{ url_for('logout') }}">Sair ({{ session.user_name }})</a>
+            {% else %}
+                <a href="{{ url_for('login') }}">Login</a>
+                <a href="{{ url_for('register_user') }}">Cadastre-se</a>
+            {% endif %}
+            <a href="{{ url_for('search') }}">Buscar Instituições</a>
+        </nav>
+    </header>
 
-    <div class="container">
+    <main class="container">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -29,7 +33,7 @@
         {% endwith %}
 
         {% block content %}{% endblock %}
-    </div>
+    </main>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     {% block scripts %}{% endblock %}

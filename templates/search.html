@@ -1,24 +1,30 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>Buscar Instituições Próximas</h2>
+<h2>Encontre Instituições Próximas</h2>
 <form method="POST">
-    <input type="text" name="endereco" placeholder="Seu endereço" required>
+    <label>Seu endereço:
+        <input type="text" name="endereco" required placeholder="Ex: Av. Paulista, 1000, São Paulo">
+    </label>
     <button type="submit">Buscar</button>
 </form>
 
-{% if instituicoes %}
-<div id="map" style="height: 400px; margin: 20px 0;"></div>
+{% if instituicoes and user_lat %}
+<div id="map" style="height: 400px; margin: 20px 0; border: 1px solid #ccc;"></div>
+<h3>Resultados:</h3>
 <ul>
 {% for inst in instituicoes %}
     <li>
         <strong>{{ inst.nome }}</strong><br>
-        Endereço: {{ inst.endereco }}<br>
+        📍 {{ inst.endereco }}<br>
+        📞 {{ inst.telefone or 'Não informado' }}<br>
+        💻 <a href="{{ inst.url_doacao }}" target="_blank">Página de Doação</a><br>
         {% if inst.distancia_km %}
-            Distância: {{ inst.distancia_km }} km<br>
+            📏 {{ inst.distancia_km }} km de você
         {% endif %}
-        <a href="{{ inst.url_doacao }}" target="_blank">Doar</a>
     </li>
 </ul>
+{% elif request.method == 'POST' %}
+<p>Nenhuma instituição encontrada.</p>
 {% endif %}
 {% endblock %}
 
@@ -30,15 +36,13 @@
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
     }).addTo(map);
 
-    // Marcador do usuário
     L.marker([{{ user_lat }}, {{ user_lon }}]).addTo(map)
         .bindPopup('Sua localização').openPopup();
 
-    // Marcadores das instituições
     {% for inst in instituicoes %}
         {% if inst.latitude and inst.longitude %}
             L.marker([{{ inst.latitude }}, {{ inst.longitude }}]).addTo(map)
-                .bindPopup("{{ inst.nome|e }}<br>{{ inst.distancia_km }} km");
+                .bindPopup("<b>{{ inst.nome|e }}</b><br>{{ inst.distancia_km }} km");
         {% endif %}
     {% endfor %}
 </script>

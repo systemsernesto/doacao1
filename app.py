@@ -22,15 +22,27 @@ DB_CONFIG = {
 def get_coordinates(address):
     try:
         url = "https://nominatim.openstreetmap.org/search"
-        params = {'q': address, 'format': 'json', 'limit': 1}
+        params = {
+            'q': address,
+            'format': 'json',
+            'limit': 1
+        }
+        # O User-Agent é obrigatório na API do Nominatim
         headers = {'User-Agent': 'DoacoesApp/1.0 (contato@doacoes.local)'}
         response = requests.get(url, params=params, headers=headers, timeout=5)
+        response.raise_for_status()  # Levanta exceção para códigos HTTP de erro
         data = response.json()
-        if 
+        
+        # Verifica se há pelo menos um resultado
+        if data and len(data) > 0:
             return float(data[0]['lat']), float(data[0]['lon'])
-    except:
-        pass
-    return None, None
+        else:
+            print(f"Nenhum resultado encontrado para o endereço: {address}")
+            return None, None
+            
+    except Exception as e:
+        print(f"Erro ao geocodificar '{address}': {e}")
+        return None, None
 
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371
