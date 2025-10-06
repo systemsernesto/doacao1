@@ -18,7 +18,7 @@ DB_CONFIG = {
     'user': os.getenv('DB_USER'),
     'password': os.getenv('DB_PASSWORD')
 }
-
+"""
 def get_coordinates(address):
     try:
         url = "https://nominatim.openstreetmap.org/search"
@@ -52,6 +52,8 @@ def haversine(lat1, lon1, lat2, lon2):
     a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
+
+"""
 
 @app.route('/')
 def index():
